@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+		<meta name="format-detection" content="telephone=no, email=no" />
+		<link href="css/mui.min.css" rel="stylesheet"/>
+	    <link rel="stylesheet" type="text/css" href="css/common.css"/>
+	    <link rel="stylesheet" href="css/putPosition.css" />
+		<title>门店坐标采集</title>
+	</head>
+	<body touchstart="" style="background: #f2f4f5;">
+		<div class="getPosition-container">
+			<input id="name" class="input" type="text" placeholder="请输入门店名称" />
+			<p class="info">备注:   点击"提交"按钮后会将您的当前坐标设置为指定门店的坐标。坐标采集时请尽量确保手机已连接上GPS卫星，在提交前请先点击“查看地图位置”按钮查看手机当前获取的位置是否准确。如发现误差较大请在室外定位。</p>
+			<div class="btn-grounp">
+				<a id="mapBtn" class="btn" href="javascript:;">查看地图位置</a>
+				<a id="submit" class="btn" href="javascript:;">提交</a>
+			</div>	
+		</div>
+		<script src="js/mui.min.js"></script>
+		<script type="text/javascript" src="js/base.js" ></script>
+		<script type="text/javascript" src="js/token.js" ></script>
+		<script src="http://res.wx.qq.com/open/js/jweixin-1.2.0.js"></script>
+		<script type="text/javascript" charset="utf-8">
+	
+      	mui.init({
+      		swipeBack:true
+      	});
+      	function loading(){	
+      		var div = document.createElement('div');
+      		div.id ='spinner-box';
+			var str='<div class="spinner-box">'+
+				'<div class="spinner">'+
+			    '<div class="spinner-container container1">'+
+			    '<div class="circle1"></div>'+
+			    '<div class="circle2"></div>'+
+			    '<div class="circle3"></div>'+
+			    '<div class="circle4"></div>'+
+			 	'</div>'+
+			    '<div class="spinner-container container2">'+
+			    '<div class="circle1"></div>'+
+			    '<div class="circle2"></div>'+
+			    '<div class="circle3"></div>'+
+			    '<div class="circle4"></div>'+
+			    '</div>'+
+			    '<div class="spinner-container container3">'+
+			    '<div class="circle1"></div>'+
+			    '<div class="circle2"></div>'+
+			    '<div class="circle3"></div>'+
+			    '<div class="circle4"></div>'+
+			    '</div>'+
+			    '</div>'+
+			    '</div>';
+			div.innerHTML = str;    
+			mui('body')[0].appendChild(div);    
+		}
+		function removeLoad(){
+			var child = document.getElementById('spinner-box');
+			mui('body')[0].removeChild(child);
+		}
+		loading();
+      	
+      	var URL = "http://inf.kuaicarkeep.com/";
+		function GetQueryString(name) {
+			var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
+			var r = window.location.search.substr(1).match(reg);
+			if(r != null) return unescape(r[2]);
+			return null;
+		}
+		var position={};
+		var token =  sessionStorage.getItem('puttoken');
+		if(!token){
+			var token = GetQueryString('jwt');
+			sessionStorage.setItem('puttoken',token);
+		}
+		refreshToken();
+		mui.ajax(URL+'wxmp/logon/getJsApiInitInfo',{
+			data:{
+				url:location.href
+			},
+			dataType:'json',//服务器返回json格式数据
+			type:'post',//HTTP请求类型
+			timeout:10000,//超时时间设置为10秒；
+			//processData:false,
+			headers:{
+				//'Content-Type':'application/json',
+				'Authorization':'Bearer '+ token
+			},
+			success:function(data){
+				//console.log(data);
+				var appId = data.appId;
+				var nonceStr = data.nonceStr;
+				var signature = data.signature;
+				var timestamp = data.timestamp;
+				wx.config({
+				    debug: false, 
+				    appId: appId, 
+				    timestamp: timestamp, 
+				    nonceStr: nonceStr, 
+				    signature: signature,
+				    jsApiList: ['openLocation','getLocation'] 
+				});
+			},
+			error:function(xhr,type,errorThrown){
+				//console.log(type);
+			}
+		});
+		
+		wx.ready(function(){
+			wx.getLocation({
+			    type: 'wgs84', // 默认为wgs84的gps坐标，如果要返回直接给openLocation用的火星坐标，可传入'gcj02'
+			    success: function (res) {
+			    	removeLoad();
+			        position.latitude = res.latitude; // 纬度，浮点数，范围为90 ~ -90
+			        position.longitude = res.longitude; // 经度，浮点数，范围为180 ~ -180。
+			    }
+			});
+			document.getElementById('mapBtn').addEventListener('tap',function(){
+				wx.openLocation({
+				    latitude: position.latitude, // 纬度，浮点数，范围为90 ~ -90
+				    longitude: position.longitude, // 经度，浮点数，范围为180 ~ -180。
+				    name: '', // 位置名
+				    address: '', // 地址详情说明
+				    scale: 10, // 地图缩放级别,整形值,范围从1~28。默认为最大
+				    infoUrl: '' // 在查看位置界面底部显示的超链接,可点击跳转
+				});
+			})
+			document.getElementById('submit').addEventListener('tap',function(){
+				var name = document.getElementById('name').value;
+				if( name == ''){
+					mui.toast('请输入门店名称');
+					return;
+				}
+				loading();
+				mui.ajax(URL+'shop/modifyLocation',{
+					data:{
+						name:name,
+						longitude:position.longitude,
+						latitude:position.latitude
+					},
+					dataType:'json',//服务器返回json格式数据
+					type:'post',//HTTP请求类型
+					timeout:10000,//超时时间设置为10秒；
+					//processData:false,
+					headers:{
+						//'Content-Type':'application/json',
+						'Authorization':'Bearer '+ token
+					},
+					success:function(data){
+						removeLoad();
+						if(data.result =='Succeeded'){
+							mui.toast('坐标采集成功');
+							//location.href='index.html';
+						}else{
+							mui.toast(data.description);
+						}
+					},
+					error:function(xhr,type,errorThrown){
+						//console.log(type);
+					}
+				});
+			})
+		})
+      	
+      	
+      	
+    </script>
+	</body>
+</html>
